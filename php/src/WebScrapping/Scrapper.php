@@ -4,10 +4,8 @@ namespace Chuva\Php\WebScrapping;
 
 use Chuva\Php\WebScrapping\Entity\Paper;
 use Chuva\Php\WebScrapping\Entity\Person;
-use Box\Spout\Reader\Common\Creator\ReaderEntityFactory;
-use Box\Spout\Common\Entity\Row;
 use Box\Spout\Writer\Common\Creator\WriterEntityFactory;
-use Box\Spout\Common\Type;
+use Box\Spout\Writer\Common\Creator\Style\StyleBuilder;
 
 
 libxml_use_internal_errors(true);
@@ -21,21 +19,23 @@ class Scrapper {
    * Loads paper information from the HTML and returns the array with the data.
    */
     public function scrap(\DOMDocument $dom): array {
+        #Caminho para o arquivo Excel.
+        $filePath = 'C:\xampp\htdocs\exercicios-2024-master\php\assets\model.xlsx';
 
-        $scrapData = this -> scrapHTML($dom);
-        $this -> Write($filePath, $scrapData);
+        $scrapData = $this -> scrapHTML($dom);
+        $this -> Write($scrapData);
 
     return [];
     }
 
     public function scrapHTML(\DOMDocument $dom): array {
-        #Coleta todo o conteudo em html.
+        #Coletando todo o conteudo em html.
         $content = file_get_contents("http://localhost/exercicios-2024-master/php/assets/origin.html");
         #Criando DOM e carregando o html nele.
-        $document = new DOMDocument();
+        $document = new $dom();
         $document->loadHTML($content);
         #Utilizando o DOMXPATH para buscar elementos no html.
-        $xPath = new DOMXPath($document);
+        $xPath = new \DOMXPath($document);
 
         #Selecionando a quantidade de links a serem lidos.
         $links = $xPath -> query('.//a[@class="paper-card p-lg bd-gradient-left"]');
@@ -55,18 +55,19 @@ class Scrapper {
             $domNodeListType = $xPath -> query('.//div[@class="tags mr-sm"]', $link);
             $domNodeListInstituition = $xPath -> query('.//a[@class="paper-card p-lg bd-gradient-left"]//span/@title');
 
-            #Relacionando autores com as instituições
-            $author_instituition = [];
+            #Relacionando autores com as instituições.
+            $authorArray = [];
             foreach ($domNodeListAuthor as $index => $authorNode) {
                 $name = $authorNode->nodeValue;
                 $instituition = $domNodeListInstituition[$index]->nodeValue;
 
-                $person = new Person($author, $instituition);
-                array_push($author_instituition, $person);
+                $person = new Person($name, $instituition);
+                array_push($authorArray, $person);
 
             }
 
-            $paper = new Paper($domNodeListID[0]->textContent, $domNodeListTitle[0]->textContent,$domNodeListType[0]->textContent, $author_instituition);
+            #Criando array que deverá conter os dados das papers.
+            $paper = new Paper($domNodeListID[0]->textContent, $domNodeListTitle[0]->textContent,$domNodeListType[0]->textContent, $authorArray);
             array_push($scrapData, $paper);
         }
 
@@ -74,53 +75,43 @@ class Scrapper {
     }
 
     public function Write($scrapData): array {
-        #Abrir o arquivo Excel para leitura
-        $reader = ReaderEntityFactory::createReaderFromFile($filePath);
-        $reader->open($filePath);
+        #Caminho para o arquivo Excel.
+        $filePath = 'C:\xampp\htdocs\exercicios-2024-master\php\assets\model.xlsx';
 
-        #Inicializar o contador de linha
-        $rowIndex = 0;
-
-        #Abrir o arquivo Excel para escrita
+        #Abrindo o arquivo Excel para escrita.
         $writer = WriterEntityFactory::createWriterFromFile($filePath);
         $writer->openToFile($filePath);
 
-        #Iterar sobre as linhas existentes do arquivo Excel
-        foreach ($reader->getSheetIterator() as $sheet) {
-            foreach ($sheet->getRowIterator() as $row) {
-                #Incrementar o contador de linha
-                $rowIndex++;
+        #Criando o header.
+        $headerRow = WriterEntityFactory::createRowFromArray(['ID', 'Title', 'Type', 'Author 1', 'Author 1 Institution', 'Author 2', 'Author 2 Institution', 'Author 3', 'Author 3 Institution', 'Author 4', 'Author 4 Institution', 'Author 5', 'Author 5 Institution', 'Author 6', 'Author 6 Institution', 'Author 7', 'Author 7 Institution', 'Author 8', 'Author 8 Institution', 'Author 9', 'Author 9 Institution']);
+        $writer->addRow($headerRow);
 
-                #Pular a primeira linha (linha do cabeçalho)
-                if ($rowIndex === 1) {
-                    $writer->addRow($row);
-                    continue;
-                }
 
-                #Verificar se há dados correspondentes para esta linha
-                if (isset($scrapData[$rowIndex])) {
-                    #Substituir os dados existentes pelos novos dados
-                    $row->setCells($scrapData[$rowIndex]);
-                }
-
-                #Escrever a linha atual no arquivo Excel
-                $writer->addRow($row);
-            }
+        #Adicionando informações dos autores de cada paper ao array.
+        foreach ($scrapData as $rowData) {
+        $rowArray = [
+            $rowData->id,
+            $rowData->title,
+            $rowData->type
+        ];
+        foreach ($rowData->authors as $author) {
+            $rowArray[] = $author->name;
+            $rowArray[] = $author->institution;
         }
 
-        #Escrever os dados restantes que não existem no arquivo Excel original
-        for ($i = $rowIndex + 1; $i <= count($scrapData); $i++) {
-            $writer->addRow(new Row($scrapData[$i]));
+        #Criando uma nova linha para o arquivo Excel.
+        $row = WriterEntityFactory::createRowFromArray($rowArray);
+
+        #Escrevendo o conteúdo já formatado.
+        $writer->addRow($row);
         }
 
         #Fechar o arquivo Excel
         $writer->close();
-        $reader->close();
 
-        return [];  
+        return [];
+        
     }
 }
-
-$filePath = 'C:\xampp\htdocs\exercicios-2024-master\php\assets\model.xlsx';
 
 echo "Alterado!";
